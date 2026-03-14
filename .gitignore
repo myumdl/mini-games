@@ -1,0 +1,13 @@
+screenshots/
+video-assets/
+docs/
+DEVELOPMENT_PLAN.md
+10款小游戏.zip
+add-branding.js
+node_modules/
+.DS_Store
+.vercel/
+.idea/
+.vscode/
+*.swp
+*.swo

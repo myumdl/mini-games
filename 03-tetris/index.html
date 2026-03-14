@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>俄罗斯方块</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0f23;font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;color:#e0e0e0;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#app{display:flex;flex-direction:column;align-items:center;height:100%;width:100%}
+.header{width:100%;display:flex;align-items:center;justify-content:center;position:relative;padding:8px 16px;flex-shrink:0;background:#16213e;border-bottom:2px solid #0f3460;min-height:48px}
+.back-link{position:absolute;left:16px;color:#7ec8e3;text-decoration:none;font-size:14px;transition:color .2s}
+.back-link:hover{color:#fff}
+.title{font-size:24px;font-weight:bold;background:linear-gradient(135deg,#00f0f0,#a000f0,#f00000,#f0a000);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:2px}
+.sound-btn{position:absolute;right:16px;background:none;border:1px solid #555;color:#ccc;font-size:18px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.sound-btn:hover{border-color:#9c27b0;color:#fff}
+.game-container{display:flex;align-items:center;justify-content:center;gap:16px;flex:1;padding:8px;max-height:calc(100% - 56px);overflow:hidden}
+.panel{display:flex;flex-direction:column;gap:12px;min-width:120px}
+.panel-box{background:#16213e;border:2px solid #1a1a4e;border-radius:8px;padding:12px;text-align:center}
+.panel-box h3{font-size:13px;color:#888;margin-bottom:8px;letter-spacing:1px}
+.preview-canvas{display:block;margin:0 auto}
+.stat-value{font-size:28px;font-weight:bold;color:#fff;line-height:1.2}
+.stat-label{font-size:12px;color:#666;margin-top:2px}
+.shortcuts{font-size:11px;color:#555;line-height:1.8}
+.shortcuts div{display:flex;justify-content:space-between;gap:8px}
+.shortcuts span:first-child{color:#666}
+.shortcuts span:last-child{color:#777;font-family:monospace}
+.board-wrapper{position:relative;flex-shrink:0}
+#board{display:block;border:2px solid #2a2a5e;border-radius:4px;background:#1a1a2e}
+.next-queue{display:flex;flex-direction:column;gap:6px}
+.next-item{background:#111;border-radius:4px;padding:4px;display:flex;align-items:center;justify-content:center}
+.combo-display{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:32px;font-weight:bold;color:#ff0;text-shadow:0 0 20px rgba(255,255,0,.5);pointer-events:none;opacity:0;transition:opacity .3s}
+.combo-display.show{opacity:1}
+.overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:4px;z-index:10;opacity:0;pointer-events:none;transition:opacity .3s}
+.overlay.active{opacity:1;pointer-events:all}
+.overlay h2{font-size:28px;margin-bottom:20px;color:#fff}
+.overlay .stats{margin-bottom:24px;text-align:center;line-height:2}
+.overlay .stats div{font-size:16px;color:#aaa}
+.overlay .stats span{color:#fff;font-weight:bold;margin-left:8px}
+.overlay button{padding:12px 36px;font-size:16px;font-weight:bold;background:linear-gradient(135deg,#6a0dad,#4a00a0);color:#fff;border:none;border-radius:8px;cursor:pointer;margin:6px;transition:transform .15s,box-shadow .15s}
+.overlay button:hover{transform:scale(1.05);box-shadow:0 0 20px rgba(106,13,173,.5)}
+.overlay button.secondary{background:linear-gradient(135deg,#333,#555)}
+.level-flash{position:absolute;top:0;left:0;width:100%;height:100%;background:#fff;pointer-events:none;border-radius:4px;opacity:0;z-index:5;transition:opacity .15s}
+.mobile-controls{display:none;width:100%;padding:8px 12px;gap:8px;flex-shrink:0}
+.mobile-controls .row{display:flex;gap:8px;justify-content:center;width:100%}
+.mobile-controls button{flex:1;max-width:80px;height:52px;border:none;border-radius:8px;font-size:20px;font-weight:bold;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+.mobile-controls button:active{transform:scale(.93);filter:brightness(1.2)}
+.btn-rotate{background:#6a0dad}
+.btn-left{background:#2563eb}
+.btn-right{background:#2563eb}
+.btn-down{background:#d97706}
+.btn-drop{background:#dc2626}
+.btn-hold{background:#059669}
+@media(max-width:700px){
+.header{padding:4px 10px}
+.title{font-size:18px}
+.game-container{flex-direction:column;align-items:center;gap:8px;padding:4px}
+.panel{flex-direction:row;gap:8px;min-width:0;flex-wrap:wrap;justify-content:center}
+.panel-box{padding:6px 10px;min-width:0}
+.panel-box h3{font-size:11px;margin-bottom:4px}
+.stat-value{font-size:18px}
+.panel.left-panel{display:none}
+.mobile-controls{display:flex;flex-direction:column}
+.shortcuts{display:none}
+}
+@media(min-width:701px){
+.mobile-controls{display:none!important}
+}
+
+/* === 常温科技 品牌样式 === */
+.cw-brand-bar{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 12px;background:rgba(22,33,62,0.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-top:1px solid rgba(15,52,96,0.5);font-size:11px;color:rgba(255,255,255,0.45);pointer-events:none}
+.cw-brand-bar img{width:18px;height:18px;border-radius:50%;opacity:0.6}
+.cw-brand-bar span{letter-spacing:0.5px}
+.cw-brand-logo-top{width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-right:4px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <a class="back-link" href="../index.html"><img class="cw-brand-logo-top" src="../logo.png" alt="常温"> &larr; 返回大厅</a>
+    <div class="title">俄罗斯方块</div>
+    <button class="sound-btn" id="soundToggle" title="音效开关">&#x1f50a;</button>
+  </div>
+  <div class="game-container" id="gameContainer">
+    <div class="panel left-panel">
+      <div class="panel-box">
+        <h3>暂存</h3>
+        <canvas class="preview-canvas" id="holdCanvas" width="100" height="80"></canvas>
+        <div id="holdHint" style="font-size:11px;color:#555;margin-top:4px"></div>
+      </div>
+      <div class="panel-box shortcuts">
+        <h3>操作</h3>
+        <div><span>&larr;&rarr;</span><span>移动</span></div>
+        <div><span>&uarr;</span><span>旋转</span></div>
+        <div><span>Z</span><span>反转</span></div>
+        <div><span>&darr;</span><span>软降</span></div>
+        <div><span>空格</span><span>硬降</span></div>
+        <div><span>C</span><span>暂存</span></div>
+        <div><span>Esc</span><span>暂停</span></div>
+      </div>
+    </div>
+    <div class="board-wrapper" id="boardWrapper">
+      <canvas id="board"></canvas>
+      <div class="combo-display" id="comboDisplay"></div>
+      <div class="level-flash" id="levelFlash"></div>
+      <div class="overlay" id="pauseOverlay">
+        <h2>已暂停</h2>
+        <button onclick="game.resume()">继续</button>
+        <button class="secondary" onclick="game.restart()">重新开始</button>
+      </div>
+      <div class="overlay" id="gameOverOverlay">
+        <h2>游戏结束</h2>
+        <div class="stats" id="gameOverStats"></div>
+        <button onclick="game.restart()">再来一局</button>
+      </div>
+    </div>
+    <div class="panel right-panel">
+      <div class="panel-box">
+        <h3>下一个</h3>
+        <div class="next-queue" id="nextQueue">
+          <div class="next-item"><canvas class="preview-canvas" id="nextCanvas0" width="100" height="60"></canvas></div>
+          <div class="next-item"><canvas class="preview-canvas" id="nextCanvas1" width="100" height="60"></canvas></div>
+          <div class="next-item"><canvas class="preview-canvas" id="nextCanvas2" width="100" height="60"></canvas></div>
+        </div>
+      </div>
+      <div class="panel-box">
+        <h3>分数</h3>
+        <div class="stat-value" id="scoreDisplay">0</div>
+        <div class="stat-label" id="highScoreLabel">最高: 0</div>
+      </div>
+      <div class="panel-box">
+        <h3>等级</h3>
+        <div class="stat-value" id="levelDisplay">1</div>
+      </div>
+      <div class="panel-box">
+        <h3>行数</h3>
+        <div class="stat-value" id="linesDisplay">0</div>
+      </div>
+    </div>
+  </div>
+  <div class="mobile-controls" id="mobileControls">
+    <div class="row">
+      <button class="btn-rotate" ontouchstart="game.rotate(-1);event.preventDefault()" onmousedown="game.rotate(-1)">&#x21b6;</button>
+      <button class="btn-left" ontouchstart="game.moveLeft();event.preventDefault()" onmousedown="game.moveLeft()">&#x2190;</button>
+      <button class="btn-down" ontouchstart="game.softDrop();event.preventDefault()" onmousedown="game.softDrop()">&#x2193;</button>
+      <button class="btn-right" ontouchstart="game.moveRight();event.preventDefault()" onmousedown="game.moveRight()">&#x2192;</button>
+      <button class="btn-drop" ontouchstart="game.hardDrop();event.preventDefault()" onmousedown="game.hardDrop()">&#x23ec;</button>
+      <button class="btn-hold" ontouchstart="game.holdPiece();event.preventDefault()" onmousedown="game.holdPiece()">&#x1f4e6;</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+
+var COLS=10, ROWS=20, CELL=30, LOCK_DELAY=500, MAX_LOCK_RESETS=15;
+var COLORS=[null,'#00f0f0','#f0f000','#a000f0','#00f000','#f00000','#f0a000','#0000f0'];
+var PIECE_NAMES=[null,'I','O','T','S','Z','L','J'];
+
+var SHAPES = {
+  I: [[[1,0],[1,1],[1,2],[1,3]],[[0,2],[1,2],[2,2],[3,2]],[[2,0],[2,1],[2,2],[2,3]],[[0,1],[1,1],[2,1],[3,1]]],
+  O: [[[0,1],[0,2],[1,1],[1,2]],[[0,1],[0,2],[1,1],[1,2]],[[0,1],[0,2],[1,1],[1,2]],[[0,1],[0,2],[1,1],[1,2]]],
+  T: [[[0,1],[1,0],[1,1],[1,2]],[[0,1],[1,1],[1,2],[2,1]],[[1,0],[1,1],[1,2],[2,1]],[[0,1],[1,0],[1,1],[2,1]]],
+  S: [[[0,1],[0,2],[1,0],[1,1]],[[0,1],[1,1],[1,2],[2,2]],[[1,1],[1,2],[2,0],[2,1]],[[0,0],[1,0],[1,1],[2,1]]],
+  Z: [[[0,0],[0,1],[1,1],[1,2]],[[0,2],[1,1],[1,2],[2,1]],[[1,0],[1,1],[2,1],[2,2]],[[0,1],[1,0],[1,1],[2,0]]],
+  L: [[[0,2],[1,0],[1,1],[1,2]],[[0,1],[1,1],[2,1],[2,2]],[[1,0],[1,1],[1,2],[2,0]],[[0,0],[0,1],[1,1],[2,1]]],
+  J: [[[0,0],[1,0],[1,1],[1,2]],[[0,1],[0,2],[1,1],[2,1]],[[1,0],[1,1],[1,2],[2,2]],[[0,1],[1,1],[2,0],[2,1]]]
+};
+
+var KICK_JLSTZ = {
+  '0>1':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  '1>0':[[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  '1>2':[[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  '2>1':[[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  '2>3':[[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+  '3>2':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  '3>0':[[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  '0>3':[[0,0],[1,0],[1,1],[0,-2],[1,-2]]
+};
+
+var KICK_I = {
+  '0>1':[[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  '1>0':[[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  '1>2':[[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+  '2>1':[[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  '2>3':[[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  '3>2':[[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  '3>0':[[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  '0>3':[[0,0],[-1,0],[2,0],[-1,2],[2,-1]]
+};
+
+var LINE_SCORES = [0, 100, 300, 500, 800];
+
+function SoundEngine() { this.enabled = true; this.ctx = null; }
+SoundEngine.prototype.init = function() {
+  if (this.ctx) return;
+  try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { this.enabled = false; }
+};
+SoundEngine.prototype.toggle = function() { this.enabled = !this.enabled; return this.enabled; };
+SoundEngine.prototype._tone = function(freq, dur, vol, type, delay) {
+  if (!this.enabled || !this.ctx) return;
+  var t = this.ctx.currentTime + (delay || 0);
+  var o = this.ctx.createOscillator(), g = this.ctx.createGain();
+  o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + dur);
+};
+SoundEngine.prototype._noise = function(dur, vol, delay) {
+  if (!this.enabled || !this.ctx) return;
+  var t = this.ctx.currentTime + (delay || 0), sz = Math.floor(this.ctx.sampleRate * dur);
+  var buf = this.ctx.createBuffer(1, sz, this.ctx.sampleRate), d = buf.getChannelData(0);
+  for (var i = 0; i < sz; i++) d[i] = Math.random() * 2 - 1;
+  var s = this.ctx.createBufferSource(); s.buffer = buf;
+  var g = this.ctx.createGain(); g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  s.connect(g); g.connect(this.ctx.destination); s.start(t); s.stop(t + dur);
+};
+SoundEngine.prototype.move = function() { this._tone(1000, 0.02, 0.05, 'square'); };
+SoundEngine.prototype.rotate = function() { this._tone(1200, 0.025, 0.05, 'square'); };
+SoundEngine.prototype.hardDrop = function() { this._noise(0.05, 0.08); this._tone(200, 0.08, 0.1, 'sine'); };
+SoundEngine.prototype.lineClear = function(n) {
+  if (n === 4) { this._tone(523.25,0.3,0.08,'sine',0); this._tone(659.25,0.3,0.08,'sine',0); this._tone(783.99,0.3,0.08,'sine',0); this._tone(1046.5,0.4,0.1,'sine',0.05); }
+  else { for (var i = 0; i < n; i++) this._tone(600+i*200, 0.15, 0.06, 'sine', i*0.08); }
+};
+SoundEngine.prototype.levelUp = function() { var ns=[523,587,659,784,880,1047]; for(var i=0;i<ns.length;i++) this._tone(ns[i],0.1,0.06,'sine',i*0.06); };
+SoundEngine.prototype.gameOver = function() { var ns=[523,466,392,349,293,261]; for(var i=0;i<ns.length;i++) this._tone(ns[i],0.2,0.07,'sine',i*0.15); };
+SoundEngine.prototype.lock = function() { this._tone(300, 0.04, 0.04, 'sine'); };
+
+function BagRandomizer() { this.bag = []; }
+BagRandomizer.prototype.next = function() {
+  if (this.bag.length === 0) {
+    this.bag = [1,2,3,4,5,6,7];
+    for (var i = this.bag.length-1; i > 0; i--) { var j = Math.floor(Math.random()*(i+1)); var t = this.bag[i]; this.bag[i] = this.bag[j]; this.bag[j] = t; }
+  }
+  return this.bag.pop();
+};
+
+function ParticleSystem() { this.particles = []; }
+ParticleSystem.prototype.emit = function(x, y, color) {
+  for (var i = 0; i < 8; i++) this.particles.push({ x:x+Math.random()*CELL, y:y, vx:(Math.random()-0.5)*3, vy:-Math.random()*4-2, life:1, decay:0.02+Math.random()*0.03, color:color, size:2+Math.random()*3 });
+};
+ParticleSystem.prototype.emitTrail = function(x, fromY, toY, color) {
+  var steps = Math.min(20, Math.abs(toY-fromY)/CELL);
+  for (var i = 0; i < steps; i++) { var py = fromY+(toY-fromY)*(i/steps); this.particles.push({ x:x+CELL*0.3+Math.random()*CELL*0.4, y:py, vx:(Math.random()-0.5)*0.5, vy:-Math.random(), life:0.5+Math.random()*0.5, decay:0.04+Math.random()*0.03, color:color, size:1.5+Math.random()*2 }); }
+};
+ParticleSystem.prototype.update = function() {
+  for (var i = this.particles.length-1; i >= 0; i--) { var p = this.particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= p.decay; if (p.life <= 0) this.particles.splice(i, 1); }
+};
+ParticleSystem.prototype.draw = function(ctx) {
+  for (var i = 0; i < this.particles.length; i++) { var p = this.particles[i]; ctx.globalAlpha = Math.max(0,p.life); ctx.fillStyle = p.color; ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size); }
+  ctx.globalAlpha = 1;
+};
+
+function TetrisGame() {
+  this.canvas = document.getElementById('board');
+  this.ctx = this.canvas.getContext('2d');
+  this.sound = new SoundEngine();
+  this.particles = new ParticleSystem();
+  this.bag = new BagRandomizer();
+  this.board = []; this.current = null; this.holdType = 0; this.holdUsed = false;
+  this.nextQueue = []; this.score = 0; this.level = 1; this.lines = 0; this.combo = -1;
+  this.gameRunning = false; this.paused = false; this.gameOverFlag = false; this.startTime = 0;
+  this.gravityTimer = null; this.lockTimer = null; this.lockResets = 0; this.lockActive = false;
+  this.clearingRows = []; this.clearFlashCount = 0; this.clearAnimTimer = null;
+  this.animFrame = null; this.comboTimer = null;
+  this.highScore = parseInt(localStorage.getItem('game_tetris_highscore')) || 0;
+  this.setupCanvas(); this.setupInput(); this.updateHighScoreDisplay(); this.start();
+}
+
+TetrisGame.prototype.setupCanvas = function() {
+  this.canvas.width = COLS * CELL; this.canvas.height = ROWS * CELL;
+  this.resizeCanvas(); var self = this; window.addEventListener('resize', function() { self.resizeCanvas(); });
+};
+TetrisGame.prototype.resizeCanvas = function() {
+  if (window.innerWidth <= 700) {
+    var aH = window.innerHeight - 204, aW = window.innerWidth - 24;
+    var s = Math.min(aW/(COLS*CELL), aH/(ROWS*CELL), 1);
+    this.canvas.style.width = (COLS*CELL*s)+'px'; this.canvas.style.height = (ROWS*CELL*s)+'px';
+  } else { this.canvas.style.width = ''; this.canvas.style.height = ''; }
+};
+TetrisGame.prototype.setupInput = function() {
+  var self = this;
+  document.addEventListener('keydown', function(e) {
+    if (self.gameOverFlag) { if (e.key==='Enter') self.restart(); return; }
+    if (e.key==='Escape') { e.preventDefault(); if(self.paused) self.resume(); else self.pause(); return; }
+    if (self.paused || !self.gameRunning) return;
+    self.sound.init();
+    switch(e.key) {
+      case 'ArrowLeft': e.preventDefault(); self.moveLeft(); break;
+      case 'ArrowRight': e.preventDefault(); self.moveRight(); break;
+      case 'ArrowUp': e.preventDefault(); self.rotate(1); break;
+      case 'z': case 'Z': e.preventDefault(); self.rotate(-1); break;
+      case 'ArrowDown': e.preventDefault(); self.softDrop(); break;
+      case ' ': e.preventDefault(); self.hardDrop(); break;
+      case 'c': case 'C': e.preventDefault(); self.holdPiece(); break;
+    }
+  });
+  document.getElementById('soundToggle').addEventListener('click', function() {
+    self.sound.init(); var on = self.sound.toggle();
+    document.getElementById('soundToggle').innerHTML = on ? '&#x1f50a;' : '&#x1f507;';
+  });
+};
+TetrisGame.prototype.createBoard = function() {
+  this.board = []; for (var r = 0; r < ROWS; r++) { var row = []; for (var c = 0; c < COLS; c++) row.push(0); this.board.push(row); }
+};
+TetrisGame.prototype.getShape = function(type, rot) { return SHAPES[PIECE_NAMES[type]][((rot%4)+4)%4]; };
+TetrisGame.prototype.isValid = function(type, rot, x, y) {
+  var shape = this.getShape(type, rot);
+  for (var i = 0; i < shape.length; i++) { var nr = y+shape[i][0], nc = x+shape[i][1]; if (nc<0||nc>=COLS||nr>=ROWS) return false; if (nr>=0 && this.board[nr][nc]!==0) return false; }
+  return true;
+};
+TetrisGame.prototype.spawnPiece = function(type) {
+  var name = PIECE_NAMES[type], ox, oy;
+  if (name==='I') { ox=3; oy=-1; } else if (name==='O') { ox=4; oy=0; } else { ox=3; oy=0; }
+  this.current = {type:type, rotation:0, x:ox, y:oy};
+  this.lockActive = false; this.lockResets = 0; this.clearLockTimer();
+  if (!this.isValid(type,0,ox,oy)) { this.current.y = oy-1; if (!this.isValid(type,0,ox,oy-1)) this.doGameOver(); }
+};
+TetrisGame.prototype.moveLeft = function() {
+  if (!this.current || this.clearingRows.length>0) return;
+  if (this.isValid(this.current.type, this.current.rotation, this.current.x-1, this.current.y)) { this.current.x -= 1; this.sound.move(); this.onPieceMoved(); }
+};
+TetrisGame.prototype.moveRight = function() {
+  if (!this.current || this.clearingRows.length>0) return;
+  if (this.isValid(this.current.type, this.current.rotation, this.current.x+1, this.current.y)) { this.current.x += 1; this.sound.move(); this.onPieceMoved(); }
+};
+TetrisGame.prototype.rotate = function(dir) {
+  if (!this.current || this.clearingRows.length>0) return;
+  this.sound.init();
+  var type = this.current.type, name = PIECE_NAMES[type];
+  if (name==='O') return;
+  var oldRot = this.current.rotation, newRot = ((oldRot+dir)%4+4)%4;
+  var kicks = (name==='I') ? KICK_I[oldRot+'>'+newRot] : KICK_JLSTZ[oldRot+'>'+newRot];
+  if (!kicks) return;
+  for (var i = 0; i < kicks.length; i++) {
+    var nx = this.current.x + kicks[i][0], ny = this.current.y - kicks[i][1];
+    if (this.isValid(type, newRot, nx, ny)) {
+      this.current.rotation = newRot; this.current.x = nx; this.current.y = ny;
+      this.sound.rotate(); this.onPieceMoved(); return;
+    }
+  }
+};
+TetrisGame.prototype.softDrop = function() {
+  if (!this.current || this.clearingRows.length>0) return;
+  if (this.isValid(this.current.type, this.current.rotation, this.current.x, this.current.y+1)) {
+    this.current.y += 1; this.score += 1; this.updateScoreDisplay(); this.onPieceMoved();
+  }
+};
+TetrisGame.prototype.hardDrop = function() {
+  if (!this.current || this.clearingRows.length>0) return;
+  this.sound.init();
+  var startY = this.current.y, dropped = 0;
+  while (this.isValid(this.current.type, this.current.rotation, this.current.x, this.current.y+1)) { this.current.y += 1; dropped++; }
+  this.score += dropped * 2; this.updateScoreDisplay();
+  var shape = this.getShape(this.current.type, this.current.rotation), color = COLORS[this.current.type];
+  for (var i = 0; i < shape.length; i++) this.particles.emit((this.current.x+shape[i][1])*CELL, (this.current.y+shape[i][0])*CELL, color);
+  if (dropped > 2) for (var j = 0; j < shape.length; j++) this.particles.emitTrail((this.current.x+shape[j][1])*CELL, (startY+shape[j][0])*CELL, (this.current.y+shape[j][0])*CELL, color);
+  this.sound.hardDrop(); this.lockPiece();
+};
+TetrisGame.prototype.holdPiece = function() {
+  if (!this.current || this.holdUsed || this.clearingRows.length>0) return;
+  this.sound.init(); var curType = this.current.type;
+  if (this.holdType===0) { this.holdType = curType; this.holdUsed = true; this.nextPiece(); }
+  else { var sw = this.holdType; this.holdType = curType; this.holdUsed = true; this.spawnPiece(sw); }
+  this.sound.rotate(); this.drawHold();
+};
+TetrisGame.prototype.getGhostY = function() {
+  if (!this.current) return 0; var gy = this.current.y;
+  while (this.isValid(this.current.type, this.current.rotation, this.current.x, gy+1)) gy++;
+  return gy;
+};
+TetrisGame.prototype.onPieceMoved = function() {
+  if (!this.lockActive) {
+    if (!this.isValid(this.current.type, this.current.rotation, this.current.x, this.current.y+1)) this.startLockTimer();
+    return;
+  }
+  if (this.isValid(this.current.type, this.current.rotation, this.current.x, this.current.y+1)) { this.lockActive = false; this.clearLockTimer(); }
+  else if (this.lockResets < MAX_LOCK_RESETS) { this.lockResets++; this.clearLockTimer(); this.startLockTimer(); }
+};
+TetrisGame.prototype.startLockTimer = function() {
+  this.lockActive = true; this.clearLockTimer();
+  var self = this; this.lockTimer = setTimeout(function() { if (self.current && self.gameRunning && !self.paused) self.lockPiece(); }, LOCK_DELAY);
+};
+TetrisGame.prototype.clearLockTimer = function() { if (this.lockTimer) { clearTimeout(this.lockTimer); this.lockTimer = null; } };
+TetrisGame.prototype.getGravityInterval = function() {
+  var l = this.level, base = Math.max(0.01, 0.8-(l-1)*0.007);
+  return Math.max(50, 1000*Math.pow(base, l-1));
+};
+TetrisGame.prototype.startGravity = function() {
+  this.stopGravity(); var self = this;
+  this.gravityTimer = setInterval(function() {
+    if (!self.current || self.paused || !self.gameRunning || self.clearingRows.length>0) return;
+    if (self.isValid(self.current.type, self.current.rotation, self.current.x, self.current.y+1)) {
+      self.current.y += 1;
+      if (!self.isValid(self.current.type, self.current.rotation, self.current.x, self.current.y+1)) if (!self.lockActive) self.startLockTimer();
+    } else if (!self.lockActive) self.startLockTimer();
+  }, this.getGravityInterval());
+};
+TetrisGame.prototype.stopGravity = function() { if (this.gravityTimer) { clearInterval(this.gravityTimer); this.gravityTimer = null; } };
+TetrisGame.prototype.lockPiece = function() {
+  if (!this.current) return;
+  this.clearLockTimer(); this.lockActive = false;
+  var shape = this.getShape(this.current.type, this.current.rotation), allAbove = true;
+  for (var i = 0; i < shape.length; i++) {
+    var r = this.current.y+shape[i][0], c = this.current.x+shape[i][1];
+    if (r >= 0) allAbove = false;
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) this.board[r][c] = this.current.type;
+  }
+  if (allAbove) { this.doGameOver(); return; }
+  this.sound.lock(); this.holdUsed = false; this.drawHold(); this.checkLines();
+};
+TetrisGame.prototype.checkLines = function() {
+  var fullRows = [];
+  for (var r = 0; r < ROWS; r++) { var full = true; for (var c = 0; c < COLS; c++) if (this.board[r][c]===0) { full = false; break; } if (full) fullRows.push(r); }
+  if (fullRows.length > 0) {
+    this.combo++; this.clearingRows = fullRows; this.clearFlashCount = 0;
+    var self = this;
+    this.doClearAnimation(fullRows, function() {
+      var sorted = fullRows.slice().sort(function(a,b){return b-a;});
+      for (var i = 0; i < sorted.length; i++) { self.board.splice(sorted[i],1); var er=[]; for(var cc=0;cc<COLS;cc++) er.push(0); self.board.unshift(er); }
+      self.clearingRows = [];
+      self.score += LINE_SCORES[fullRows.length] * self.level;
+      if (self.combo > 0) { self.score += 50*self.combo*self.level; self.showCombo(self.combo); }
+      self.lines += fullRows.length;
+      var nl = Math.floor(self.lines/10)+1;
+      if (nl > self.level) { self.level = nl; self.sound.levelUp(); self.flashLevel(); self.startGravity(); }
+      self.sound.lineClear(fullRows.length); self.updateScoreDisplay(); self.nextPiece();
+    });
+  } else { this.combo = -1; this.nextPiece(); }
+};
+TetrisGame.prototype.doClearAnimation = function(rows, cb) {
+  var self = this, flashes = 0;
+  function flash() { flashes++; self.clearFlashCount = flashes; if (flashes>=6) { self.clearFlashCount=0; cb(); } else self.clearAnimTimer = setTimeout(flash, 50); }
+  this.clearAnimTimer = setTimeout(flash, 50);
+};
+TetrisGame.prototype.showCombo = function(n) {
+  var el = document.getElementById('comboDisplay');
+  el.textContent = 'Combo \u00d7'+(n+1); el.classList.add('show');
+  if (this.comboTimer) clearTimeout(this.comboTimer);
+  this.comboTimer = setTimeout(function() { el.classList.remove('show'); }, 1500);
+};
+TetrisGame.prototype.flashLevel = function() {
+  var el = document.getElementById('levelFlash'); el.style.opacity = '0.4';
+  setTimeout(function() { el.style.opacity = '0'; }, 200);
+};
+TetrisGame.prototype.nextPiece = function() {
+  while (this.nextQueue.length < 4) this.nextQueue.push(this.bag.next());
+  this.spawnPiece(this.nextQueue.shift()); this.drawNext(); this.drawHold();
+};
+TetrisGame.prototype.start = function() {
+  this.createBoard(); this.holdType=0; this.holdUsed=false; this.nextQueue=[];
+  this.score=0; this.level=1; this.lines=0; this.combo=-1;
+  this.gameOverFlag=false; this.paused=false; this.clearingRows=[]; this.clearFlashCount=0;
+  this.particles.particles=[]; this.bag = new BagRandomizer(); this.startTime = Date.now();
+  this.updateScoreDisplay(); this.hideOverlays(); this.gameRunning = true;
+  this.nextPiece(); this.startGravity(); this.startRenderLoop();
+};
+TetrisGame.prototype.restart = function() {
+  this.stopGravity(); this.clearLockTimer();
+  if (this.clearAnimTimer) clearTimeout(this.clearAnimTimer);
+  if (this.animFrame) cancelAnimationFrame(this.animFrame);
+  this.start();
+};
+TetrisGame.prototype.pause = function() {
+  if (!this.gameRunning || this.gameOverFlag) return;
+  this.paused = true; this.stopGravity(); this.clearLockTimer();
+  document.getElementById('pauseOverlay').classList.add('active');
+};
+TetrisGame.prototype.resume = function() {
+  if (!this.paused) return; this.paused = false;
+  document.getElementById('pauseOverlay').classList.remove('active');
+  this.startGravity();
+  if (this.current && !this.isValid(this.current.type, this.current.rotation, this.current.x, this.current.y+1)) this.startLockTimer();
+};
+TetrisGame.prototype.doGameOver = function() {
+  this.gameRunning = false; this.gameOverFlag = true;
+  this.stopGravity(); this.clearLockTimer(); this.current = null; this.sound.gameOver();
+  if (this.score > this.highScore) { this.highScore = this.score; localStorage.setItem('game_tetris_highscore', this.highScore); }
+  this.updateHighScoreDisplay();
+  var el = Date.now()-this.startTime, m = Math.floor(el/60000), s = Math.floor((el%60000)/1000);
+  document.getElementById('gameOverStats').innerHTML =
+    '<div>\u5206\u6570<span>'+this.score.toLocaleString()+'</span></div>'+
+    '<div>\u884c\u6570<span>'+this.lines+'</span></div>'+
+    '<div>\u7b49\u7ea7<span>'+this.level+'</span></div>'+
+    '<div>\u7528\u65f6<span>'+m+'\u5206'+s+'\u79d2</span></div>';
+  document.getElementById('gameOverOverlay').classList.add('active');
+};
+TetrisGame.prototype.hideOverlays = function() {
+  document.getElementById('pauseOverlay').classList.remove('active');
+  document.getElementById('gameOverOverlay').classList.remove('active');
+};
+TetrisGame.prototype.updateScoreDisplay = function() {
+  document.getElementById('scoreDisplay').textContent = this.score.toLocaleString();
+  document.getElementById('levelDisplay').textContent = this.level;
+  document.getElementById('linesDisplay').textContent = this.lines;
+};
+TetrisGame.prototype.updateHighScoreDisplay = function() {
+  document.getElementById('highScoreLabel').textContent = '\u6700\u9ad8: '+this.highScore.toLocaleString();
+};
+TetrisGame.prototype.drawPreview = function(canvas, type) {
+  var ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h); if (!type) return;
+  var shape = this.getShape(type,0), color = COLORS[type];
+  var minR=99,maxR=-1,minC=99,maxC=-1;
+  for (var i=0;i<shape.length;i++) { if(shape[i][0]<minR) minR=shape[i][0]; if(shape[i][0]>maxR) maxR=shape[i][0]; if(shape[i][1]<minC) minC=shape[i][1]; if(shape[i][1]>maxC) maxC=shape[i][1]; }
+  var pw=maxC-minC+1, ph=maxR-minR+1;
+  var cs = Math.min(20, Math.floor(w/(pw+1)), Math.floor(h/(ph+1)));
+  var ox = Math.floor((w-pw*cs)/2), oy = Math.floor((h-ph*cs)/2);
+  for (var j=0;j<shape.length;j++) this.drawBlock(ctx, ox+(shape[j][1]-minC)*cs, oy+(shape[j][0]-minR)*cs, cs, color, 1);
+};
+TetrisGame.prototype.drawHold = function() {
+  var canvas = document.getElementById('holdCanvas'), hint = document.getElementById('holdHint');
+  if (this.holdType>0) { this.drawPreview(canvas, this.holdType); hint.textContent = this.holdUsed ? '(\u5df2\u4f7f\u7528)' : ''; canvas.style.opacity = this.holdUsed ? '0.4' : '1'; }
+  else { canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); hint.textContent = '\u6309 C \u6682\u5b58'; canvas.style.opacity = '0.5'; }
+};
+TetrisGame.prototype.drawNext = function() {
+  for (var i=0;i<3;i++) this.drawPreview(document.getElementById('nextCanvas'+i), this.nextQueue[i]||0);
+};
+TetrisGame.prototype.drawBlock = function(ctx, x, y, size, color, alpha) {
+  var g=1, bx=x+g, by=y+g, bs=size-g*2;
+  ctx.globalAlpha = (alpha!==undefined) ? alpha : 1;
+  ctx.fillStyle = color; ctx.fillRect(bx, by, bs, bs);
+  var hl = Math.max(2, Math.floor(bs*0.12));
+  ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(bx,by,bs,hl); ctx.fillRect(bx,by,hl,bs);
+  ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.fillRect(bx,by+bs-hl,bs,hl); ctx.fillRect(bx+bs-hl,by,hl,bs);
+  var ins = Math.max(3, Math.floor(bs*0.18));
+  ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(bx+ins,by+ins,bs-ins*2,bs-ins*2);
+  ctx.globalAlpha = 1;
+};
+TetrisGame.prototype.drawGhostBlock = function(ctx, x, y, size, color) {
+  var g=1, bx=x+g, by=y+g, bs=size-g*2;
+  ctx.globalAlpha = 0.2; ctx.fillStyle = color; ctx.fillRect(bx, by, bs, bs);
+  ctx.globalAlpha = 0.5; ctx.strokeStyle = color; ctx.setLineDash([3,3]); ctx.lineWidth = 1.5;
+  ctx.strokeRect(bx+0.5, by+0.5, bs-1, bs-1); ctx.setLineDash([]); ctx.globalAlpha = 1;
+};
+TetrisGame.prototype.render = function() {
+  var ctx=this.ctx, w=this.canvas.width, h=this.canvas.height, c, r, i;
+  ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=0.5;
+  for(c=1;c<COLS;c++){ctx.beginPath();ctx.moveTo(c*CELL,0);ctx.lineTo(c*CELL,h);ctx.stroke();}
+  for(r=1;r<ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*CELL);ctx.lineTo(w,r*CELL);ctx.stroke();}
+  for(r=0;r<ROWS;r++){
+    var isCl=false; for(i=0;i<this.clearingRows.length;i++) if(this.clearingRows[i]===r){isCl=true;break;}
+    for(c=0;c<COLS;c++){
+      if(this.board[r][c]!==0){
+        if(isCl && this.clearFlashCount%2===1){ctx.fillStyle='#fff';ctx.fillRect(c*CELL+1,r*CELL+1,CELL-2,CELL-2);}
+        else this.drawBlock(ctx,c*CELL,r*CELL,CELL,COLORS[this.board[r][c]]);
+      }
+    }
+  }
+  if(this.current && this.clearingRows.length===0){
+    var gy=this.getGhostY(), shape, color, pr, pc;
+    if(gy!==this.current.y){
+      shape=this.getShape(this.current.type,this.current.rotation); color=COLORS[this.current.type];
+      for(i=0;i<shape.length;i++){pr=gy+shape[i][0];pc=this.current.x+shape[i][1];if(pr>=0&&pr<ROWS&&pc>=0&&pc<COLS)this.drawGhostBlock(ctx,pc*CELL,pr*CELL,CELL,color);}
+    }
+    shape=this.getShape(this.current.type,this.current.rotation); color=COLORS[this.current.type];
+    for(i=0;i<shape.length;i++){pr=this.current.y+shape[i][0];pc=this.current.x+shape[i][1];if(pr>=0&&pr<ROWS&&pc>=0&&pc<COLS)this.drawBlock(ctx,pc*CELL,pr*CELL,CELL,color);}
+  }
+  this.particles.update(); this.particles.draw(ctx);
+};
+TetrisGame.prototype.startRenderLoop = function() {
+  var self=this; (function loop(){self.render();self.animFrame=requestAnimationFrame(loop);})();
+};
+
+var game;
+window.addEventListener('DOMContentLoaded', function() { game = new TetrisGame(); window.game = game; });
+})();
+</script>
+<div class="cw-brand-bar"><img src="../logo.png" alt="常温"><span>常温科技 · 让开发回归常温</span></div>
+</body>
+</html>

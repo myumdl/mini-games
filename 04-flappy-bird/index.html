@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>像素飞鸟 - Flappy Bird</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a1a2e;font-family:'Microsoft YaHei','PingFang SC',sans-serif;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+#gameContainer{position:relative;margin:0 auto;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+canvas{display:block}
+.top-bar{position:absolute;top:0;left:0;right:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(22,33,62,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-bottom:1px solid rgba(15,52,96,0.5);min-height:44px;transition:opacity 0.3s}
+.top-bar.hidden{opacity:0;pointer-events:none}
+.game-title{color:#ff9800;font-size:18px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.5)}
+#backLink{color:#7ec8e3;text-decoration:none;font-size:14px;padding:4px 10px;border-radius:12px;transition:color 0.2s}
+#backLink:hover{color:#a8e6ff}
+#soundBtn{width:36px;height:36px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:50%;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;transition:all 0.2s;color:#e0e0e0;font-size:18px}
+#soundBtn:hover{border-color:#ff9800;background:rgba(255,152,0,0.15)}
+#soundBtn canvas{width:22px;height:22px}
+
+/* === 常温科技 品牌样式 === */
+.cw-brand-bar{position:fixed;bottom:0;left:0;right:0;z-index:9999;display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 12px;background:rgba(22,33,62,0.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-top:1px solid rgba(15,52,96,0.5);font-size:11px;color:rgba(255,255,255,0.45);pointer-events:none}
+.cw-brand-bar img{width:18px;height:18px;border-radius:50%;opacity:0.6}
+.cw-brand-bar span{letter-spacing:0.5px}
+.cw-brand-logo-top{width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-right:4px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div class="top-bar">
+    <a id="backLink" href="../index.html"><img class="cw-brand-logo-top" src="../logo.png" alt="常温"> &larr; 返回大厅</a>
+    <span class="game-title">&#x1F426; 像素飞鸟</span>
+    <button id="soundBtn" title="音效开关"></button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+</div>
+<script>
+(function(){
+'use strict';
+
+// ==================== CONSTANTS ====================
+var W = 400, H = 600;
+var GRAVITY = 0.45;
+var JUMP_FORCE = 7.5;
+var PIPE_SPEED = 2.2;
+var PIPE_WIDTH = 52;
+var PIPE_CAP_HEIGHT = 26;
+var PIPE_CAP_EXTRA = 4;
+var PIPE_SPACING = 200;
+var INITIAL_GAP = 150;
+var MIN_GAP = 120;
+var GAP_SHRINK_INTERVAL = 10;
+var GAP_SHRINK_AMOUNT = 5;
+var PIPE_MARGIN = 70;
+var GROUND_HEIGHT = 80;
+var BIRD_X = 80;
+var BIRD_RADIUS = 12;
+var NIGHT_SCORE = 20;
+var NIGHT_TRANSITION = 180;
+
+var MEDAL_BRONZE = 10;
+var MEDAL_SILVER = 20;
+var MEDAL_GOLD = 30;
+var MEDAL_PLATINUM = 40;
+
+var READY = 0, PLAYING = 1, DYING = 2, GAMEOVER = 3;
+
+// ==================== CANVAS SETUP ====================
+var canvas = document.getElementById('gameCanvas');
+var ctx = canvas.getContext('2d');
+canvas.width = W;
+canvas.height = H;
+
+var backLink = document.getElementById('backLink');
+var soundBtn = document.getElementById('soundBtn');
+
+function resizeCanvas() {
+  var cw = window.innerWidth;
+  var ch = window.innerHeight;
+  var scale = Math.min(cw / W, ch / H);
+  canvas.style.width = (W * scale) + 'px';
+  canvas.style.height = (H * scale) + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ==================== WEB AUDIO ====================
+var audioCtx = null;
+var soundEnabled = true;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, duration, type, freqEnd, vol) {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = type || 'square';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    if (freqEnd) osc.frequency.linearRampToValueAtTime(freqEnd, audioCtx.currentTime + duration);
+    gain.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playFlap() { playTone(500, 0.04, 'square', 600, 0.12); }
+function playScore() { playTone(800, 0.05, 'square', 1000, 0.1); }
+function playHit() {
+  if (!soundEnabled || !audioCtx) return;
+  try {
+    var bufSize = audioCtx.sampleRate * 0.05;
+    var buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+    var src = audioCtx.createBufferSource();
+    var gain = audioCtx.createGain();
+    src.buffer = buf;
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    src.connect(gain);
+    gain.connect(audioCtx.destination);
+    src.start();
+  } catch(e) {}
+}
+function playDie() { playTone(300, 0.2, 'sawtooth', 100, 0.15); }
+function playMedal() {
+  if (!soundEnabled || !audioCtx) return;
+  var t = audioCtx.currentTime;
+  var notes = [523, 659, 784, 1047];
+  for (var i = 0; i < notes.length; i++) {
+    (function(idx) {
+      try {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(notes[idx], t + idx * 0.08);
+        gain.gain.setValueAtTime(0.1, t + idx * 0.08);
+        gain.gain.linearRampToValueAtTime(0, t + idx * 0.08 + 0.12);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t + idx * 0.08);
+        osc.stop(t + idx * 0.08 + 0.12);
+      } catch(e) {}
+    })(i);
+  }
+}
+
+// Sound button icon
+function drawSoundIcon() {
+  var sc = document.createElement('canvas');
+  sc.width = 26; sc.height = 26;
+  var sx = sc.getContext('2d');
+  sx.fillStyle = '#fff';
+  sx.strokeStyle = '#fff';
+  sx.lineWidth = 2;
+  sx.beginPath();
+  sx.moveTo(5, 10); sx.lineTo(9, 10); sx.lineTo(14, 5); sx.lineTo(14, 21);
+  sx.lineTo(9, 16); sx.lineTo(5, 16); sx.closePath(); sx.fill();
+  if (soundEnabled) {
+    sx.beginPath(); sx.arc(15, 13, 4, -0.7, 0.7); sx.stroke();
+    sx.beginPath(); sx.arc(15, 13, 7.5, -0.5, 0.5); sx.stroke();
+  } else {
+    sx.lineWidth = 2.5;
+    sx.beginPath(); sx.moveTo(18, 9); sx.lineTo(24, 17); sx.stroke();
+    sx.beginPath(); sx.moveTo(24, 9); sx.lineTo(18, 17); sx.stroke();
+  }
+  soundBtn.innerHTML = '';
+  soundBtn.appendChild(sc);
+}
+drawSoundIcon();
+soundBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  soundEnabled = !soundEnabled;
+  drawSoundIcon();
+});
+
+// ==================== GAME STATE ====================
+var state = READY;
+var score = 0;
+var bestScore = parseInt(localStorage.getItem('game_flappy_highscore')) || 0;
+var pipes = [];
+var bird = { y: H / 2 - 20, vel: 0, rotation: 0 };
+var groundX = 0;
+var frameCount = 0;
+var pipeTimer = 0;
+var flashAlpha = 0;
+var scoreScale = 1;
+var nightProgress = 0;
+var nightTransitionFrame = -1;
+var currentGap = INITIAL_GAP;
+var medalAwarded = false;
+var dyingTimer = 0;
+var gameOverAlpha = 0;
+var cloudX = 0;
+var hillsX = 0;
+var wingFrame = 0;
+var wingTimer = 0;
+var bobAngle = 0;
+var retryBtnRect = { x: 0, y: 0, w: 0, h: 0 };
+
+// Stars for night sky
+var stars = [];
+for (var si = 0; si < 40; si++) {
+  stars.push({
+    x: Math.random() * W,
+    y: Math.random() * (H - GROUND_HEIGHT - 100),
+    s: Math.random() * 2 + 0.5,
+    b: Math.random() * 6.28
+  });
+}
+
+// Clouds
+var clouds = [];
+for (var ci = 0; ci < 6; ci++) {
+  clouds.push({
+    x: Math.random() * (W + 200) - 50,
+    y: 25 + Math.random() * 130,
+    w: 45 + Math.random() * 65,
+    h: 18 + Math.random() * 18
+  });
+}
+
+// ==================== CORE FUNCTIONS ====================
+function resetGame() {
+  bird.y = H / 2 - 20;
+  bird.vel = 0;
+  bird.rotation = 0;
+  pipes = [];
+  score = 0;
+  pipeTimer = PIPE_SPACING - 60;
+  flashAlpha = 0;
+  scoreScale = 1;
+  currentGap = INITIAL_GAP;
+  medalAwarded = false;
+  dyingTimer = 0;
+  gameOverAlpha = 0;
+}
+
+function jump() {
+  ensureAudio();
+  if (state === READY) {
+    state = PLAYING;
+    resetGame();
+    bird.vel = -JUMP_FORCE;
+    playFlap();
+    document.querySelector('.top-bar').classList.add('hidden');
+  } else if (state === PLAYING) {
+    bird.vel = -JUMP_FORCE;
+    playFlap();
+  }
+}
+
+function spawnPipe() {
+  var gap = currentGap;
+  var minY = PIPE_MARGIN + gap / 2;
+  var maxY = H - GROUND_HEIGHT - PIPE_MARGIN - gap / 2;
+  var gapY = minY + Math.random() * (maxY - minY);
+  pipes.push({ x: W + 10, gapY: gapY, gapHeight: gap, scored: false });
+}
+
+function circleRectCollision(cx, cy, cr, rx, ry, rw, rh) {
+  var closestX = Math.max(rx, Math.min(cx, rx + rw));
+  var closestY = Math.max(ry, Math.min(cy, ry + rh));
+  var dx = cx - closestX;
+  var dy = cy - closestY;
+  return (dx * dx + dy * dy) < (cr * cr);
+}
+
+function checkCollision() {
+  var bx = BIRD_X, by = bird.y, br = BIRD_RADIUS;
+  // Ground collision
+  if (by + br >= H - GROUND_HEIGHT) return true;
+  // Ceiling collision
+  if (by - br <= 0) return true;
+  // Pipe collisions
+  for (var i = 0; i < pipes.length; i++) {
+    var p = pipes[i];
+    var topPipeBottom = p.gapY - p.gapHeight / 2;
+    var bottomPipeTop = p.gapY + p.gapHeight / 2;
+    // Top pipe body (above cap)
+    if (circleRectCollision(bx, by, br, p.x, 0, PIPE_WIDTH, topPipeBottom - PIPE_CAP_HEIGHT)) return true;
+    // Top pipe cap (wider lip at opening)
+    if (circleRectCollision(bx, by, br, p.x - PIPE_CAP_EXTRA, topPipeBottom - PIPE_CAP_HEIGHT, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT)) return true;
+    // Bottom pipe body (below cap)
+    if (circleRectCollision(bx, by, br, p.x, bottomPipeTop + PIPE_CAP_HEIGHT, PIPE_WIDTH, H - GROUND_HEIGHT - bottomPipeTop - PIPE_CAP_HEIGHT)) return true;
+    // Bottom pipe cap (wider lip at opening)
+    if (circleRectCollision(bx, by, br, p.x - PIPE_CAP_EXTRA, bottomPipeTop, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT)) return true;
+  }
+  return false;
+}
+
+// ==================== UPDATE ====================
+function update() {
+  frameCount++;
+  wingTimer++;
+  if (wingTimer > 6) { wingTimer = 0; wingFrame = (wingFrame + 1) % 3; }
+
+  if (state === READY) {
+    bobAngle += 0.05;
+    bird.y = H / 2 - 20 + Math.sin(bobAngle) * 12;
+    bird.rotation = Math.sin(bobAngle) * 5;
+    groundX = (groundX + 1) % 24;
+    cloudX += 0.3;
+    if (nightProgress > 0) nightProgress = Math.max(0, nightProgress - 0.008);
+    return;
+  }
+
+  if (state === PLAYING) {
+    // Bird physics
+    bird.vel += GRAVITY;
+    bird.y += bird.vel;
+
+    // Rotation: nose up when ascending, nose down when falling
+    var targetRot = bird.vel < -2 ? -25 : Math.min(70, bird.vel * 6);
+    bird.rotation += (targetRot - bird.rotation) * 0.12;
+
+    // Scrolling
+    groundX = (groundX + PIPE_SPEED) % 24;
+    cloudX += 0.4;
+    hillsX += PIPE_SPEED * 0.5;
+
+    // Pipe spawning
+    pipeTimer += PIPE_SPEED;
+    if (pipeTimer >= PIPE_SPACING) {
+      pipeTimer = 0;
+      spawnPipe();
+    }
+
+    // Update pipes
+    for (var i = pipes.length - 1; i >= 0; i--) {
+      pipes[i].x -= PIPE_SPEED;
+      // Score when bird passes pipe
+      if (!pipes[i].scored && pipes[i].x + PIPE_WIDTH < BIRD_X) {
+        pipes[i].scored = true;
+        score++;
+        scoreScale = 1.5;
+        playScore();
+        // Difficulty increase
+        if (score % GAP_SHRINK_INTERVAL === 0 && currentGap > MIN_GAP) {
+          currentGap = Math.max(MIN_GAP, currentGap - GAP_SHRINK_AMOUNT);
+        }
+        // Night transition trigger
+        if (score === NIGHT_SCORE && nightTransitionFrame < 0) {
+          nightTransitionFrame = 0;
+        }
+      }
+      // Remove off-screen pipes
+      if (pipes[i].x < -PIPE_WIDTH - PIPE_CAP_EXTRA * 2 - 10) {
+        pipes.splice(i, 1);
+      }
+    }
+
+    // Night transition progress
+    if (nightTransitionFrame >= 0 && nightTransitionFrame < NIGHT_TRANSITION) {
+      nightTransitionFrame++;
+      nightProgress = nightTransitionFrame / NIGHT_TRANSITION;
+    }
+
+    // Score scale animation decay
+    if (scoreScale > 1) scoreScale = Math.max(1, scoreScale - 0.04);
+
+    // Collision check
+    if (checkCollision()) {
+      state = DYING;
+      flashAlpha = 0.8;
+      playHit();
+      setTimeout(playDie, 80);
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem('game_flappy_highscore', bestScore.toString());
+      }
+    }
+    return;
+  }
+
+  if (state === DYING) {
+    dyingTimer++;
+    bird.vel += GRAVITY * 0.8;
+    bird.y += bird.vel;
+    bird.rotation += 10;
+    if (flashAlpha > 0) flashAlpha = Math.max(0, flashAlpha - 0.06);
+    // Bird hits ground
+    if (bird.y >= H - GROUND_HEIGHT - BIRD_RADIUS) {
+      bird.y = H - GROUND_HEIGHT - BIRD_RADIUS;
+      bird.vel = 0;
+      state = GAMEOVER;
+      gameOverAlpha = 0;
+      document.querySelector('.top-bar').classList.remove('hidden');
+    }
+    // Timeout fallback
+    if (dyingTimer > 120) {
+      state = GAMEOVER;
+      gameOverAlpha = 0;
+      document.querySelector('.top-bar').classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (state === GAMEOVER) {
+    if (gameOverAlpha < 1) gameOverAlpha = Math.min(1, gameOverAlpha + 0.04);
+    if (flashAlpha > 0) flashAlpha = Math.max(0, flashAlpha - 0.03);
+  }
+}
+
+// ==================== DRAWING HELPERS ====================
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function roundRect(c, x, y, w, h, r, fill, stroke) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);
+  c.quadraticCurveTo(x + w, y, x + w, y + r);
+  c.lineTo(x + w, y + h - r);
+  c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h);
+  c.quadraticCurveTo(x, y + h, x, y + h - r);
+  c.lineTo(x, y + r);
+  c.quadraticCurveTo(x, y, x + r, y);
+  c.closePath();
+  if (fill) c.fill();
+  if (stroke) c.stroke();
+}
+
+// ==================== DRAW: BACKGROUND ====================
+function drawBackground() {
+  var np = nightProgress;
+
+  // Sky gradient (day to night interpolation)
+  var topR = lerp(0x87, 0x0d, np), topG = lerp(0xce, 0x0d, np), topB = lerp(0xeb, 0x30, np);
+  var botR = lerp(0xe0, 0x14, np), botG = lerp(0xf0, 0x14, np), botB = lerp(0xff, 0x38, np);
+  var grad = ctx.createLinearGradient(0, 0, 0, H - GROUND_HEIGHT);
+  grad.addColorStop(0, 'rgb(' + (topR|0) + ',' + (topG|0) + ',' + (topB|0) + ')');
+  grad.addColorStop(1, 'rgb(' + (botR|0) + ',' + (botG|0) + ',' + (botB|0) + ')');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H - GROUND_HEIGHT);
+
+  // Stars (appear during night)
+  if (np > 0.15) {
+    var sa = Math.min(1, (np - 0.15) / 0.5);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var flicker = 0.5 + 0.5 * Math.sin(frameCount * 0.04 + s.b);
+      ctx.globalAlpha = sa * flicker;
+      ctx.fillStyle = '#fffde8';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Moon (crescent effect)
+    if (np > 0.35) {
+      var ma = Math.min(1, (np - 0.35) / 0.35);
+      ctx.globalAlpha = ma;
+      ctx.fillStyle = '#ffeebb';
+      ctx.shadowColor = '#ffeebb';
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(W - 60, 65, 24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // Cut out crescent
+      var skyColor = 'rgb(' + (topR|0) + ',' + (topG|0) + ',' + (topB|0) + ')';
+      ctx.fillStyle = skyColor;
+      ctx.beginPath();
+      ctx.arc(W - 50, 60, 21, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Clouds (parallax layer 1 - slowest at 0.2x)
+  var cloudAlpha = Math.max(0.15, 1 - np * 0.8);
+  ctx.globalAlpha = cloudAlpha * 0.65;
+  ctx.fillStyle = np > 0.5 ? 'rgba(200,200,220,0.5)' : '#fff';
+  for (var ci = 0; ci < clouds.length; ci++) {
+    var c = clouds[ci];
+    var cx = ((c.x - cloudX * 0.25) % (W + 200)) - 50;
+    if (cx < -100) cx += W + 200;
+    drawCloud(cx, c.y, c.w, c.h);
+  }
+  ctx.globalAlpha = 1;
+
+  // Hills (parallax layer 2 - medium at 0.5x)
+  drawHills();
+}
+
+function drawCloud(x, y, w, h) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x - w * 0.28, y + h * 0.18, w * 0.32, h * 0.38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x + w * 0.3, y + h * 0.12, w * 0.36, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHills() {
+  var np = nightProgress;
+  var baseY = H - GROUND_HEIGHT;
+  var offset1 = (hillsX * 0.3) % W;
+  var offset2 = (hillsX * 0.6) % W;
+
+  // Far hills (parallax layer 2a)
+  var hr = lerp(100, 28, np), hg = lerp(160, 48, np), hb = lerp(105, 55, np);
+  ctx.fillStyle = 'rgb(' + (hr|0) + ',' + (hg|0) + ',' + (hb|0) + ')';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (var x = -10; x <= W + 10; x += 4) {
+    var y = baseY - 28 - Math.sin((x + offset1) * 0.009) * 22 - Math.sin((x + offset1) * 0.017) * 12;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W + 10, baseY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Near hills (parallax layer 2b)
+  hr = lerp(78, 18, np); hg = lerp(128, 36, np); hb = lerp(82, 46, np);
+  ctx.fillStyle = 'rgb(' + (hr|0) + ',' + (hg|0) + ',' + (hb|0) + ')';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (var x2 = -10; x2 <= W + 10; x2 += 3) {
+    var y2 = baseY - 14 - Math.sin((x2 + offset2) * 0.013) * 16 - Math.cos((x2 + offset2) * 0.027) * 7;
+    ctx.lineTo(x2, y2);
+  }
+  ctx.lineTo(W + 10, baseY);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ==================== DRAW: PIPES ====================
+function drawPipe(p) {
+  var topBottom = p.gapY - p.gapHeight / 2;
+  var botTop = p.gapY + p.gapHeight / 2;
+
+  // Body gradient (3D-ish look)
+  var bodyGrad = ctx.createLinearGradient(p.x, 0, p.x + PIPE_WIDTH, 0);
+  bodyGrad.addColorStop(0, '#4caf50');
+  bodyGrad.addColorStop(0.2, '#6abf6e');
+  bodyGrad.addColorStop(0.5, '#4caf50');
+  bodyGrad.addColorStop(0.8, '#3d9141');
+  bodyGrad.addColorStop(1, '#2e7d32');
+
+  // Cap gradient (darker, wider lip)
+  var capGrad = ctx.createLinearGradient(p.x - PIPE_CAP_EXTRA, 0, p.x + PIPE_WIDTH + PIPE_CAP_EXTRA, 0);
+  capGrad.addColorStop(0, '#43a047');
+  capGrad.addColorStop(0.2, '#5cb860');
+  capGrad.addColorStop(0.5, '#43a047');
+  capGrad.addColorStop(0.8, '#357a38');
+  capGrad.addColorStop(1, '#1b5e20');
+
+  // === TOP PIPE ===
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(p.x, 0, PIPE_WIDTH, topBottom - PIPE_CAP_HEIGHT);
+  // Top cap
+  ctx.fillStyle = capGrad;
+  ctx.fillRect(p.x - PIPE_CAP_EXTRA, topBottom - PIPE_CAP_HEIGHT, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT);
+  // Highlight stripe
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(p.x + 4, 0, 5, topBottom - PIPE_CAP_HEIGHT);
+  ctx.fillRect(p.x - PIPE_CAP_EXTRA + 3, topBottom - PIPE_CAP_HEIGHT + 2, 5, PIPE_CAP_HEIGHT - 4);
+  // Dark edge
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(p.x + PIPE_WIDTH - 4, 0, 4, topBottom - PIPE_CAP_HEIGHT);
+
+  // === BOTTOM PIPE ===
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(p.x, botTop + PIPE_CAP_HEIGHT, PIPE_WIDTH, H - GROUND_HEIGHT - botTop - PIPE_CAP_HEIGHT);
+  // Bottom cap
+  ctx.fillStyle = capGrad;
+  ctx.fillRect(p.x - PIPE_CAP_EXTRA, botTop, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT);
+  // Highlight stripe
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(p.x + 4, botTop + PIPE_CAP_HEIGHT, 5, H - GROUND_HEIGHT - botTop - PIPE_CAP_HEIGHT);
+  ctx.fillRect(p.x - PIPE_CAP_EXTRA + 3, botTop + 2, 5, PIPE_CAP_HEIGHT - 4);
+  // Dark edge
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(p.x + PIPE_WIDTH - 4, botTop + PIPE_CAP_HEIGHT, 4, H - GROUND_HEIGHT - botTop - PIPE_CAP_HEIGHT);
+
+  // Cap outlines
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(p.x - PIPE_CAP_EXTRA, topBottom - PIPE_CAP_HEIGHT, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT);
+  ctx.strokeRect(p.x - PIPE_CAP_EXTRA, botTop, PIPE_WIDTH + PIPE_CAP_EXTRA * 2, PIPE_CAP_HEIGHT);
+}
+
+// ==================== DRAW: GROUND ====================
+function drawGround() {
+  var baseY = H - GROUND_HEIGHT;
+
+  // Grass strip gradient
+  var grassGrad = ctx.createLinearGradient(0, baseY, 0, baseY + 14);
+  grassGrad.addColorStop(0, '#7ec850');
+  grassGrad.addColorStop(0.5, '#6ab840');
+  grassGrad.addColorStop(1, '#5a9e2f');
+  ctx.fillStyle = grassGrad;
+  ctx.fillRect(0, baseY, W, 14);
+
+  // Grass blade triangles (scrolling)
+  ctx.fillStyle = '#8dd860';
+  for (var gx = -12; gx < W + 12; gx += 10) {
+    var tx = gx - (groundX % 10);
+    ctx.beginPath();
+    ctx.moveTo(tx, baseY);
+    ctx.lineTo(tx + 2, baseY - 6);
+    ctx.lineTo(tx + 5, baseY);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#5a9e2f';
+  for (var gx2 = -12; gx2 < W + 12; gx2 += 10) {
+    var tx2 = gx2 + 5 - (groundX % 10);
+    ctx.beginPath();
+    ctx.moveTo(tx2, baseY);
+    ctx.lineTo(tx2 + 2, baseY - 4);
+    ctx.lineTo(tx2 + 4, baseY);
+    ctx.fill();
+  }
+
+  // Dirt section
+  var dirtGrad = ctx.createLinearGradient(0, baseY + 14, 0, H);
+  dirtGrad.addColorStop(0, '#d4a36a');
+  dirtGrad.addColorStop(0.4, '#c4935a');
+  dirtGrad.addColorStop(1, '#a07040');
+  ctx.fillStyle = dirtGrad;
+  ctx.fillRect(0, baseY + 14, W, GROUND_HEIGHT - 14);
+
+  // Dirt texture dots
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  for (var dx = -24; dx < W + 24; dx += 20) {
+    var dtx = dx - (groundX % 20);
+    ctx.beginPath(); ctx.arc(dtx + 5, baseY + 28, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(dtx + 14, baseY + 42, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(dtx + 8, baseY + 55, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Top border line
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  ctx.lineTo(W, baseY);
+  ctx.stroke();
+}
+
+// ==================== DRAW: BIRD ====================
+function drawBird(x, y, rot) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot * Math.PI / 180);
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath();
+  ctx.ellipse(2, 3, BIRD_RADIUS + 2, BIRD_RADIUS + 1, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body with radial gradient
+  var bodyGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, BIRD_RADIUS + 2);
+  bodyGrad.addColorStop(0, '#ffe066');
+  bodyGrad.addColorStop(0.5, '#f5a623');
+  bodyGrad.addColorStop(1, '#e08818');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, BIRD_RADIUS + 1, BIRD_RADIUS, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#c47f17';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Belly highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(-1, -3, 7, 5, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wing (3-frame animation: up/mid/down)
+  var wingOffsets = [-3, 0, 4];
+  var wf = state === READY ? Math.floor(frameCount / 8) % 3 : wingFrame;
+  var wy = wingOffsets[wf];
+  var wingGrad = ctx.createRadialGradient(-4, 2 + wy, 1, -3, 2 + wy, 9);
+  wingGrad.addColorStop(0, '#ffe680');
+  wingGrad.addColorStop(1, '#e0a020');
+  ctx.fillStyle = wingGrad;
+  ctx.beginPath();
+  ctx.ellipse(-4, 2 + wy, 9, 5.5, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#c4901a';
+  ctx.lineWidth = 0.7;
+  ctx.stroke();
+
+  // Eye (white circle with dark pupil)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(5, -4, 5.5, 6, 0.05, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#666';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+
+  // Pupil
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(7, -3.5, 2.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pupil highlight
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(8, -4.8, 1, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Beak top triangle (orange)
+  ctx.fillStyle = '#ff7b00';
+  ctx.beginPath();
+  ctx.moveTo(10, -2);
+  ctx.lineTo(18, 0);
+  ctx.lineTo(10, 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Beak bottom triangle (darker orange)
+  ctx.fillStyle = '#e06000';
+  ctx.beginPath();
+  ctx.moveTo(10, 2);
+  ctx.lineTo(16, 2);
+  ctx.lineTo(10, 5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Beak outline
+  ctx.strokeStyle = '#c05000';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(10, -2); ctx.lineTo(18, 0); ctx.lineTo(10, 2);
+  ctx.lineTo(16, 2); ctx.lineTo(10, 5);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ==================== DRAW: SCORE HUD ====================
+function drawScoreHUD() {
+  if (state !== PLAYING && state !== DYING) return;
+  ctx.save();
+  ctx.translate(W / 2, 50);
+  var sc = state === DYING ? 1 : scoreScale;
+  ctx.scale(sc, sc);
+  ctx.font = 'bold 50px "Arial Black", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Dark outline for readability
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.strokeText(score, 0, 0);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(score, 0, 0);
+  ctx.restore();
+}
+
+// ==================== DRAW: READY SCREEN ====================
+function drawReadyScreen() {
+  ctx.save();
+  ctx.translate(W / 2, 135);
+  var titleBob = Math.sin(frameCount * 0.035) * 6;
+  ctx.translate(0, titleBob);
+
+  // Title background pill
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  roundRect(ctx, -120, -28, 240, 56, 28, true, false);
+
+  // Title text
+  ctx.font = 'bold 40px "Arial Black", "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#c47f17';
+  ctx.strokeText('像素飞鸟', 0, 0);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('像素飞鸟', 0, 0);
+  ctx.restore();
+
+  // Blinking "点击开始"
+  var blinkAlpha = 0.5 + 0.5 * Math.sin(frameCount * 0.07);
+  ctx.globalAlpha = blinkAlpha;
+  ctx.font = 'bold 22px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.strokeText('点击开始', W / 2, H / 2 + 65);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('点击开始', W / 2, H / 2 + 65);
+  ctx.globalAlpha = 1;
+
+  // Best score display
+  if (bestScore > 0) {
+    ctx.font = '16px "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.textAlign = 'center';
+    ctx.fillText('最高分: ' + bestScore, W / 2, H / 2 + 105);
+  }
+
+  // Controls instruction
+  ctx.font = '13px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.textAlign = 'center';
+  ctx.fillText('空格键 / 点击 / 触摸屏幕', W / 2, H / 2 + 135);
+}
+
+// ==================== DRAW: MEDAL ====================
+function drawMedal(x, y, radius, type) {
+  var colors = {
+    bronze: { main: '#cd7f32', light: '#e0a050', dark: '#a05a20' },
+    silver: { main: '#c0c0c0', light: '#e8e8e8', dark: '#888888' },
+    gold: { main: '#ffd700', light: '#ffe860', dark: '#c8a800' },
+    platinum: { main: '#e5e4e2', light: '#f8f8ff', dark: '#a0a0b0' }
+  };
+  var c = colors[type] || colors.bronze;
+
+  // Medal glow
+  ctx.shadowColor = c.main;
+  ctx.shadowBlur = 8;
+
+  // Medal circle with radial gradient
+  var grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.1, x, y, radius);
+  grad.addColorStop(0, c.light);
+  grad.addColorStop(0.6, c.main);
+  grad.addColorStop(1, c.dark);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Medal border
+  ctx.strokeStyle = c.dark;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Inner decorative ring
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, radius - 4, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Star icon in center
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  for (var i = 0; i < 5; i++) {
+    var angle = -Math.PI / 2 + (i * Math.PI * 2 / 5);
+    var ox = Math.cos(angle) * (radius * 0.55);
+    var oy = Math.sin(angle) * (radius * 0.55);
+    var ia = angle + Math.PI / 5;
+    var ix = Math.cos(ia) * (radius * 0.22);
+    var iy = Math.sin(ia) * (radius * 0.22);
+    if (i === 0) ctx.moveTo(ox, oy);
+    else ctx.lineTo(ox, oy);
+    ctx.lineTo(ix, iy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// ==================== DRAW: GAME OVER SCREEN ====================
+function drawGameOverScreen() {
+  if (state !== GAMEOVER) return;
+  ctx.globalAlpha = gameOverAlpha;
+
+  // Dark overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Panel dimensions
+  var pw = 270, ph = 275;
+  var px = (W - pw) / 2;
+  var py = (H - ph) / 2 - 15;
+
+  // Panel drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, px + 5, py + 5, pw, ph, 14, true, false);
+
+  // Panel background gradient
+  var panelGrad = ctx.createLinearGradient(px, py, px, py + ph);
+  panelGrad.addColorStop(0, '#fdf3dc');
+  panelGrad.addColorStop(1, '#e8d5a8');
+  ctx.fillStyle = panelGrad;
+  roundRect(ctx, px, py, pw, ph, 14, true, false);
+
+  // Panel border
+  ctx.strokeStyle = '#b89860';
+  ctx.lineWidth = 3;
+  roundRect(ctx, px, py, pw, ph, 14, false, true);
+
+  // Inner highlight border
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, px + 5, py + 5, pw - 10, ph - 10, 11, false, true);
+
+  // "游戏结束" title
+  ctx.font = 'bold 28px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#7a3b10';
+  ctx.fillText('游戏结束', W / 2, py + 40);
+
+  // Score sub-panel
+  var spx = px + 22, spy = py + 60;
+  var spw = pw - 44, sph = 120;
+  ctx.fillStyle = 'rgba(180,150,100,0.12)';
+  roundRect(ctx, spx, spy, spw, sph, 8, true, false);
+  ctx.strokeStyle = 'rgba(160,130,80,0.25)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, spx, spy, spw, sph, 8, false, true);
+
+  // Medal (if earned)
+  var medalType = null;
+  if (score >= MEDAL_PLATINUM) medalType = 'platinum';
+  else if (score >= MEDAL_GOLD) medalType = 'gold';
+  else if (score >= MEDAL_SILVER) medalType = 'silver';
+  else if (score >= MEDAL_BRONZE) medalType = 'bronze';
+
+  if (medalType) {
+    drawMedal(spx + 42, spy + sph / 2, 27, medalType);
+    if (!medalAwarded) {
+      medalAwarded = true;
+      playMedal();
+    }
+  } else {
+    // Empty medal placeholder
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.beginPath();
+    ctx.arc(spx + 42, spy + sph / 2, 27, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Score numbers
+  var textX = spx + spw - 18;
+  ctx.textAlign = 'right';
+
+  ctx.font = '13px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#a08060';
+  ctx.fillText('得分', textX, spy + 28);
+  ctx.font = 'bold 30px Arial, sans-serif';
+  ctx.fillStyle = '#333';
+  ctx.fillText(score, textX, spy + 58);
+
+  ctx.font = '13px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#a08060';
+  ctx.fillText('最高分', textX, spy + 82);
+  ctx.font = 'bold 30px Arial, sans-serif';
+  ctx.fillStyle = '#333';
+  ctx.fillText(bestScore, textX, spy + 112);
+
+  // "NEW!" indicator for new best score
+  if (score === bestScore && score > 0) {
+    ctx.save();
+    ctx.font = 'bold 11px Arial, sans-serif';
+    ctx.fillStyle = '#ff3333';
+    ctx.textAlign = 'left';
+    ctx.translate(spx + 80, spy + 108);
+    ctx.rotate(-0.1);
+    ctx.fillText('NEW!', 0, 0);
+    ctx.restore();
+  }
+
+  // "再来一局" retry button
+  var btnW = 170, btnH = 46;
+  var btnX = (W - btnW) / 2;
+  var btnY = py + ph - 62;
+
+  // Store button rect for click detection
+  retryBtnRect.x = btnX;
+  retryBtnRect.y = btnY;
+  retryBtnRect.w = btnW;
+  retryBtnRect.h = btnH;
+
+  // Button shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  roundRect(ctx, btnX + 2, btnY + 3, btnW, btnH, 23, true, false);
+
+  // Button body gradient
+  var btnGrad = ctx.createLinearGradient(btnX, btnY, btnX, btnY + btnH);
+  btnGrad.addColorStop(0, '#72d476');
+  btnGrad.addColorStop(0.5, '#4caf50');
+  btnGrad.addColorStop(1, '#3d9141');
+  ctx.fillStyle = btnGrad;
+  roundRect(ctx, btnX, btnY, btnW, btnH, 23, true, false);
+
+  // Button border
+  ctx.strokeStyle = '#2e7d32';
+  ctx.lineWidth = 2;
+  roundRect(ctx, btnX, btnY, btnW, btnH, 23, false, true);
+
+  // Button top highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  roundRect(ctx, btnX + 3, btnY + 2, btnW - 6, btnH / 2 - 4, 20, true, false);
+
+  // Button text
+  ctx.font = 'bold 20px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fillText('再来一局', W / 2 + 1, btnY + btnH / 2 + 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('再来一局', W / 2, btnY + btnH / 2);
+
+  ctx.globalAlpha = 1;
+}
+
+// ==================== DRAW: FLASH ====================
+function drawFlash() {
+  if (flashAlpha > 0.01) {
+    ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ==================== MAIN DRAW ====================
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  for (var i = 0; i < pipes.length; i++) drawPipe(pipes[i]);
+  drawGround();
+  drawBird(BIRD_X, bird.y, bird.rotation);
+  drawScoreHUD();
+  if (state === READY) drawReadyScreen();
+  drawFlash();
+  drawGameOverScreen();
+}
+
+// ==================== GAME LOOP (60fps via requestAnimationFrame) ====================
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+// ==================== INPUT HANDLING ====================
+function getCanvasCoords(clientX, clientY) {
+  var rect = canvas.getBoundingClientRect();
+  var scaleX = W / rect.width;
+  var scaleY = H / rect.height;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY
+  };
+}
+
+function handleInput(clientX, clientY) {
+  ensureAudio();
+  if (state === GAMEOVER) {
+    var coords = getCanvasCoords(clientX, clientY);
+    if (coords.x >= retryBtnRect.x && coords.x <= retryBtnRect.x + retryBtnRect.w &&
+        coords.y >= retryBtnRect.y && coords.y <= retryBtnRect.y + retryBtnRect.h) {
+      state = READY;
+      resetGame();
+      nightProgress = 0;
+      nightTransitionFrame = -1;
+      document.querySelector('.top-bar').classList.remove('hidden');
+    }
+    return;
+  }
+  jump();
+}
+
+// Mouse click
+canvas.addEventListener('mousedown', function(e) {
+  e.preventDefault();
+  handleInput(e.clientX, e.clientY);
+});
+
+// Touch (mobile)
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  if (e.touches.length > 0) {
+    handleInput(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, { passive: false });
+
+// Keyboard (Space)
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault();
+    ensureAudio();
+    if (state === GAMEOVER) {
+      state = READY;
+      resetGame();
+      nightProgress = 0;
+      nightTransitionFrame = -1;
+      document.querySelector('.top-bar').classList.remove('hidden');
+    } else {
+      jump();
+    }
+  }
+});
+
+// Prevent touch scrolling
+document.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+
+// ==================== START THE GAME ====================
+resetGame();
+state = READY;
+gameLoop();
+
+})();
+</script>
+<div class="cw-brand-bar"><img src="../logo.png" alt="常温"><span>常温科技 · 让开发回归常温</span></div>
+</body>
+</html>
