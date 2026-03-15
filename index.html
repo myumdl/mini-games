@@ -3,193 +3,188 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>小游戏合集 - 10款精品网页小游戏</title>
+<title>小游戏合集</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
-canvas#particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
-.wrapper{position:relative;z-index:1}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#0f0f1a;color:#e0e0e0;min-height:100vh;overflow-x:hidden}
+canvas#particles{position:fixed;inset:0;z-index:0;pointer-events:none}
+.container{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 20px}
 
 /* Hero */
-.hero{text-align:center;padding:60px 20px 40px}
-.hero-icon{font-size:64px;margin-bottom:16px;display:block;animation:float 3s ease-in-out infinite}
+.hero{text-align:center;padding:60px 0 40px}
+.hero-icon{font-size:56px;margin-bottom:12px;display:block;animation:float 3s ease-in-out infinite}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-.hero h1{font-size:clamp(32px,6vw,52px);font-weight:800;background:linear-gradient(135deg,#00d2ff,#7b2ff7,#ff6ec7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;line-height:1.2}
-.hero p{font-size:clamp(14px,2.5vw,18px);color:#8888aa;max-width:500px;margin:0 auto}
+.hero h1{font-size:42px;font-weight:800;background:linear-gradient(135deg,#6c5ce7,#00cec9,#fdcb6e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+.hero p{font-size:17px;color:#888;letter-spacing:1px}
 
 /* Stats */
-.stats{display:flex;justify-content:center;gap:clamp(24px,5vw,60px);padding:20px 20px 40px;flex-wrap:wrap}
+.stats{display:flex;justify-content:center;gap:50px;margin:30px 0 45px;flex-wrap:wrap}
 .stat{text-align:center}
-.stat-num{font-size:clamp(28px,5vw,42px);font-weight:800;background:linear-gradient(135deg,#00d2ff,#7b2ff7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.stat-label{font-size:13px;color:#666;margin-top:4px}
+.stat .num{font-size:36px;font-weight:800;background:linear-gradient(135deg,#6c5ce7,#00cec9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat .lbl{font-size:13px;color:#666;margin-top:2px}
 
 /* Grid */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1100px;margin:0 auto;padding:0 24px 60px}
-@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.grid{grid-template-columns:1fr;max-width:400px}}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;padding-bottom:50px}
+@media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:540px){.grid{grid-template-columns:1fr}}
 
 /* Card */
-.card{background:#1a1a2e;border-radius:16px;overflow:hidden;transition:transform .3s,box-shadow .3s;cursor:pointer;opacity:0;transform:translateY(30px);position:relative}
+.card{background:#16182a;border-radius:14px;overflow:hidden;transition:transform .3s,box-shadow .3s;opacity:0;transform:translateY(30px)}
 .card.visible{opacity:1;transform:translateY(0)}
-.card:hover{transform:translateY(-6px);box-shadow:0 12px 40px rgba(100,100,255,.2)}
-.card-bar{height:4px}
-.card-body{padding:24px}
-.card-icon{font-size:40px;margin-bottom:12px;display:block}
-.card-title{font-size:20px;font-weight:700;margin-bottom:10px;color:#fff}
-.card-meta{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-.tag{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
-.tag-puzzle{background:rgba(0,150,255,.15);color:#4dabf7}
-.tag-action{background:rgba(255,70,70,.15);color:#ff6b6b}
-.tag-strategy{background:rgba(255,160,40,.15);color:#ffa94d}
-.stars{font-size:13px;color:#ffd43b;letter-spacing:1px}
-.card-desc{font-size:13px;color:#777;line-height:1.6;margin-bottom:16px;min-height:40px}
-.card-score{font-size:12px;color:#555;margin-bottom:16px}
-.card-score span{color:#7b2ff7;font-weight:700}
-.btn{display:block;width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#7b2ff7,#00d2ff);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;text-align:center;text-decoration:none}
-.btn:hover{opacity:.85}
+.card:hover{transform:translateY(-6px);box-shadow:0 12px 40px rgba(108,92,231,.25)}
+.card-top{height:5px}
+.card-body{padding:22px 22px 18px}
+.card-icon{font-size:36px;margin-bottom:8px;display:block}
+.card-title{font-size:19px;font-weight:700;color:#fff;margin-bottom:8px}
+.card-meta{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.tag{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;letter-spacing:.5px}
+.tag-puzzle{background:rgba(52,152,219,.18);color:#5dade2}
+.tag-action{background:rgba(231,76,60,.18);color:#e74c3c}
+.tag-strategy{background:rgba(243,156,18,.18);color:#f39c12}
+.stars{font-size:13px;color:#f39c12;letter-spacing:1px}
+.card-desc{font-size:13px;color:#777;line-height:1.5;margin-bottom:14px;min-height:38px}
+.card-bottom{display:flex;align-items:center;justify-content:space-between}
+.best-score{font-size:12px;color:#555}
+.best-score span{color:#f7dc6f;font-weight:600}
+.play-btn{display:inline-block;padding:8px 22px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;transition:background .2s,box-shadow .2s}
+.play-btn:hover{box-shadow:0 4px 18px rgba(108,92,231,.35)}
+
+/* tag colors for btn */
+.card[data-cat="puzzle"] .play-btn{background:linear-gradient(135deg,#3498db,#6c5ce7)}
+.card[data-cat="action"] .play-btn{background:linear-gradient(135deg,#e74c3c,#e67e22)}
+.card[data-cat="strategy"] .play-btn{background:linear-gradient(135deg,#f39c12,#e67e22)}
+.card[data-cat="puzzle"] .card-top{background:linear-gradient(90deg,#3498db,#6c5ce7)}
+.card[data-cat="action"] .card-top{background:linear-gradient(90deg,#e74c3c,#e67e22)}
+.card[data-cat="strategy"] .card-top{background:linear-gradient(90deg,#f39c12,#e67e22)}
 
 /* Footer */
-.footer{text-align:center;padding:40px 20px;color:#444;font-size:13px;border-top:1px solid #1a1a2e}
-.footer a{color:#555;text-decoration:none}
+.footer{text-align:center;padding:30px 0 40px;font-size:13px;color:#444;border-top:1px solid #1a1a2e}
+.footer a{color:#6c5ce7;text-decoration:none}
 </style>
 </head>
 <body>
+
 <canvas id="particles"></canvas>
-<div class="wrapper">
+
+<div class="container">
   <section class="hero">
     <span class="hero-icon">🎮</span>
     <h1>小游戏合集</h1>
     <p>10款精品网页小游戏，即开即玩，零安装</p>
   </section>
+
   <section class="stats">
-    <div class="stat"><div class="stat-num">10</div><div class="stat-label">精选游戏</div></div>
-    <div class="stat"><div class="stat-num">3</div><div class="stat-label">游戏类型</div></div>
-    <div class="stat"><div class="stat-num">0</div><div class="stat-label">需要安装</div></div>
+    <div class="stat"><div class="num">10</div><div class="lbl">精选游戏</div></div>
+    <div class="stat"><div class="num">3</div><div class="lbl">游戏类型</div></div>
+    <div class="stat"><div class="num">0</div><div class="lbl">需要安装</div></div>
   </section>
+
   <section class="grid" id="grid"></section>
-  <footer class="footer">© 2026 小游戏合集 · 使用 HTML5 Canvas 构建 · <a href="http://www.nativetrain.com/">常温科技</a></footer>
+
+  <footer class="footer">
+    &copy; 2026 小游戏合集 &middot; Made with <a href="#">HTML5 + Canvas</a> &middot; 即开即玩
+  </footer>
 </div>
 
 <script>
-// ==================== 粒子背景 ====================
-const cvs = document.getElementById('particles');
-const pctx = cvs.getContext('2d');
-let particles = [];
-const PARTICLE_COUNT = 60;
-const CONNECT_DIST = 120;
-
-function resizeCanvas() {
-  cvs.width = window.innerWidth;
-  cvs.height = window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-for (let i = 0; i < PARTICLE_COUNT; i++) {
-  particles.push({
-    x: Math.random() * cvs.width,
-    y: Math.random() * cvs.height,
-    vx: (Math.random() - 0.5) * 0.4,
-    vy: (Math.random() - 0.5) * 0.4,
-    r: Math.random() * 2 + 1
-  });
-}
-
-function animateParticles() {
-  pctx.clearRect(0, 0, cvs.width, cvs.height);
-  for (const p of particles) {
-    p.x += p.vx; p.y += p.vy;
-    if (p.x < 0) p.x = cvs.width;
-    if (p.x > cvs.width) p.x = 0;
-    if (p.y < 0) p.y = cvs.height;
-    if (p.y > cvs.height) p.y = 0;
-    pctx.beginPath();
-    pctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    pctx.fillStyle = 'rgba(100,100,255,0.35)';
-    pctx.fill();
-  }
-  // 连线
-  for (let i = 0; i < particles.length; i++) {
-    for (let j = i + 1; j < particles.length; j++) {
-      const dx = particles[i].x - particles[j].x;
-      const dy = particles[i].y - particles[j].y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < CONNECT_DIST) {
-        pctx.beginPath();
-        pctx.moveTo(particles[i].x, particles[i].y);
-        pctx.lineTo(particles[j].x, particles[j].y);
-        pctx.strokeStyle = `rgba(100,100,255,${0.12 * (1 - d / CONNECT_DIST)})`;
-        pctx.lineWidth = 0.8;
-        pctx.stroke();
-      }
-    }
-  }
-  requestAnimationFrame(animateParticles);
-}
-animateParticles();
-
-// ==================== 游戏数据 ====================
+// --- Game Data ---
 const games = [
-  { name:'2048数字华容道', icon:'🔢', type:'益智', typeCls:'puzzle', stars:2, url:'./01-2048/index.html', scoreKey:'best_score_2048',
-    desc:'滑动合并数字方块，挑战最高分！经典数字益智游戏。' },
-  { name:'贪吃蛇', icon:'🐍', type:'动作', typeCls:'action', stars:2, url:'./02-snake/index.html', scoreKey:'snake_best',
-    desc:'控制小蛇吃掉食物不断成长，别撞到自己！' },
-  { name:'俄罗斯方块', icon:'🧱', type:'益智', typeCls:'puzzle', stars:3, url:'./03-tetris/index.html', scoreKey:'tetris_best',
-    desc:'旋转下落的方块，填满一行即可消除，经典永不过时。' },
-  { name:'像素飞鸟', icon:'🐦', type:'动作', typeCls:'action', stars:1, url:'./04-flappy-bird/index.html', scoreKey:'flappy_best',
-    desc:'点击屏幕控制小鸟飞行，躲避管道，看你能飞多远！' },
-  { name:'打砖块', icon:'🏓', type:'动作', typeCls:'action', stars:2, url:'./05-breakout/index.html', scoreKey:'breakout_best',
-    desc:'操控挡板弹球击碎所有砖块，道具让你势不可挡。' },
-  { name:'宝石消消乐', icon:'💎', type:'益智', typeCls:'puzzle', stars:4, url:'./06-match3/index.html', scoreKey:'match3_best',
-    desc:'交换相邻宝石，三个及以上同色连线即可消除得分。' },
-  { name:'扫雷', icon:'💣', type:'策略', typeCls:'strategy', stars:3, url:'./07-minesweeper/index.html', scoreKey:'minesweeper_best',
-    desc:'根据数字推理地雷位置，考验你的逻辑推理能力。' },
-  { name:'记忆翻牌', icon:'🃏', type:'益智', typeCls:'puzzle', stars:1, url:'./08-memory-cards/index.html', scoreKey:'memory_best',
-    desc:'翻开卡牌找到配对，用最少步数完成所有配对。' },
-  { name:'涂鸦跳跃', icon:'⬆️', type:'动作', typeCls:'action', stars:3, url:'./09-doodle-jump/index.html', scoreKey:'doodle_best',
-    desc:'控制角色在平台间跳跃，不断向上攀登挑战高度。' },
-  { name:'五子棋', icon:'⚫', type:'策略', typeCls:'strategy', stars:4, url:'./10-gomoku/index.html', scoreKey:'gomoku_wins',
-    desc:'与AI对弈五子棋，五子连珠即可获胜，策略为王。' }
+  { id:'2048',  name:'2048数字华容道', icon:'🔢', cat:'puzzle',   stars:2, url:'./01-2048/index.html',       key:'2048_best',    desc:'滑动数字方块，合并相同数字，挑战2048！' },
+  { id:'snake', name:'贪吃蛇',        icon:'🐍', cat:'action',   stars:2, url:'./02-snake/index.html',      key:'snake_best',   desc:'控制小蛇吃食物不断变长，别撞墙别咬到自己。' },
+  { id:'tetris',name:'俄罗斯方块',    icon:'🧱', cat:'puzzle',   stars:3, url:'./03-tetris/index.html',     key:null,           desc:'经典方块下落，旋转拼接，满行消除得分。' },
+  { id:'flappy',name:'像素飞鸟',      icon:'🐦', cat:'action',   stars:1, url:'./04-flappy-bird/index.html',key:'flappy_best',  desc:'点击屏幕控制小鸟飞翔，穿越绿色管道。' },
+  { id:'break', name:'打砖块',        icon:'🏓', cat:'action',   stars:2, url:'./05-breakout/index.html',   key:null,           desc:'移动挡板反弹小球，击碎所有彩色砖块过关。' },
+  { id:'match3',name:'宝石消消乐',    icon:'💎', cat:'puzzle',   stars:4, url:'./06-match3/index.html',     key:null,           desc:'交换相邻宝石，三个同色连线消除，连锁加分。' },
+  { id:'mine',  name:'扫雷',          icon:'💣', cat:'strategy', stars:3, url:'./07-minesweeper/index.html',key:null,           desc:'根据数字推理地雷位置，小心翼翼翻开每一格。' },
+  { id:'memory',name:'记忆翻牌',      icon:'🃏', cat:'puzzle',   stars:1, url:'./08-memory-cards/index.html',key:null,          desc:'翻开卡片记住图案，找出所有配对，考验记忆力。' },
+  { id:'doodle',name:'涂鸦跳跃',      icon:'⬆️', cat:'action',   stars:3, url:'./09-doodle-jump/index.html',key:'doodle_best',  desc:'控制小人左右移动，踩平台不断往上跳。' },
+  { id:'gomoku',name:'五子棋',        icon:'⚫', cat:'strategy', stars:4, url:'./10-gomoku/index.html',     key:null,           desc:'人机对战五子棋，你执黑先行，挑战AI策略。' },
 ];
 
-// ==================== 渲染卡片 ====================
-const grid = document.getElementById('grid');
+const catLabel = { puzzle:'益智', action:'动作', strategy:'策略' };
+const gridEl = document.getElementById('grid');
 
 games.forEach((g, i) => {
-  const barColors = {
-    puzzle: 'linear-gradient(90deg,#228be6,#15aabf)',
-    action: 'linear-gradient(90deg,#ff6b6b,#f06595)',
-    strategy: 'linear-gradient(90deg,#ffa94d,#ffd43b)'
-  };
+  const bestVal = g.key ? localStorage.getItem(g.key) : null;
   const starsStr = '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars);
-  const best = localStorage.getItem(g.scoreKey);
-  const scoreHtml = best !== null ? `最高分: <span>${best}</span>` : '暂无记录';
-
   const card = document.createElement('div');
   card.className = 'card';
-  card.style.transitionDelay = `${i * 0.06}s`;
+  card.dataset.cat = g.cat;
+  card.style.transitionDelay = (i * 0.07) + 's';
   card.innerHTML = `
-    <div class="card-bar" style="background:${barColors[g.typeCls]}"></div>
+    <div class="card-top"></div>
     <div class="card-body">
       <span class="card-icon">${g.icon}</span>
       <div class="card-title">${g.name}</div>
       <div class="card-meta">
-        <span class="tag tag-${g.typeCls}">${g.type}</span>
+        <span class="tag tag-${g.cat}">${catLabel[g.cat]}</span>
         <span class="stars">${starsStr}</span>
       </div>
       <div class="card-desc">${g.desc}</div>
-      <div class="card-score">${scoreHtml}</div>
-      <a class="btn" href="${g.url}">开始游戏</a>
+      <div class="card-bottom">
+        <div class="best-score">${bestVal ? '最高分 <span>' + bestVal + '</span>' : ''}</div>
+        <a class="play-btn" href="${g.url}">开始游戏</a>
+      </div>
     </div>`;
-  grid.appendChild(card);
+  gridEl.appendChild(card);
 });
 
-// ==================== 滚动入场 ====================
+// --- Scroll reveal ---
 const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
-}, { threshold: 0.15 });
-
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }});
+}, { threshold: 0.1 });
 document.querySelectorAll('.card').forEach(c => observer.observe(c));
+
+// --- Particle background ---
+const cv = document.getElementById('particles');
+const cx = cv.getContext('2d');
+let pw, ph, dots;
+
+function initParticles() {
+  pw = cv.width = window.innerWidth;
+  ph = cv.height = window.innerHeight;
+  const count = Math.floor(pw * ph / 18000);
+  dots = Array.from({length: count}, () => ({
+    x: Math.random() * pw,
+    y: Math.random() * ph,
+    vx: (Math.random() - 0.5) * 0.35,
+    vy: (Math.random() - 0.5) * 0.35,
+    r: Math.random() * 1.5 + 0.5
+  }));
+}
+
+function animateParticles() {
+  cx.clearRect(0, 0, pw, ph);
+  for (const d of dots) {
+    d.x += d.vx; d.y += d.vy;
+    if (d.x < 0) d.x = pw; if (d.x > pw) d.x = 0;
+    if (d.y < 0) d.y = ph; if (d.y > ph) d.y = 0;
+    cx.fillStyle = 'rgba(108,92,231,0.5)';
+    cx.beginPath(); cx.arc(d.x, d.y, d.r, 0, Math.PI * 2); cx.fill();
+  }
+  // lines
+  cx.strokeStyle = 'rgba(108,92,231,0.08)';
+  cx.lineWidth = 1;
+  for (let i = 0; i < dots.length; i++) {
+    for (let j = i + 1; j < dots.length; j++) {
+      const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y;
+      const dist = dx * dx + dy * dy;
+      if (dist < 14000) {
+        cx.globalAlpha = 1 - dist / 14000;
+        cx.beginPath();
+        cx.moveTo(dots[i].x, dots[i].y);
+        cx.lineTo(dots[j].x, dots[j].y);
+        cx.stroke();
+      }
+    }
+  }
+  cx.globalAlpha = 1;
+  requestAnimationFrame(animateParticles);
+}
+
+window.addEventListener('resize', initParticles);
+initParticles();
+animateParticles();
 </script>
 </body>
 </html>
